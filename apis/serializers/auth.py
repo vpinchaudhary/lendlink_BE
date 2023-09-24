@@ -1,44 +1,54 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from rest_framework.exceptions import ValidationError
-from django.db.utils import IntegrityError
 from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
+from ..serializers import OTPVerificationSerializer
 
-class RegisterSerializer(serializers.ModelSerializer):
+class RegisterSerializer(serializers.Serializer):
     permission_classes = [AllowAny]
-    class Meta:
-        model = User
-        fields = ('id', 'username', 'email', 'password', 'first_name', 'last_name')
-        extra_kwargs = {
-            'password': {'write_only': True},
-        }
 
-    def validate_password(self, value):
-        # Validate the password
-        if len(value) < 8:
-            raise serializers.ValidationError("Password must be at least 8 characters long.")
-        return value
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, required=True, min_length=8)
+    first_name = serializers.CharField(required=True)
+    last_name = serializers.CharField(required=True)
+    otp = serializers.CharField()
+    purpose = serializers.CharField()
 
-    def validate_email(self, value):
-        # Check the email format
-        if not value or "@" not in value:
-            raise serializers.ValidationError("Provide a valid email address.")
-        
-        # Ensure email is unique (although most configurations of the User model ensure this, it's still good practice)
-        if User.objects.filter(email=value).exists():
+    def validate(self, data):
+        otp_serializer = OTPVerificationSerializer(data=data)
+
+        if User.objects.filter(email=data['email']).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         
-        return value
+        if len(data['password']) < 8:
+            raise serializers.ValidationError("Password must be at least 8 characters long.")
+        
+        if not otp_serializer.is_valid():
+            raise serializers.ValidationError(otp_serializer.errors)
 
-    def create(self, validated_data):
-        try:
-            user = User.objects.create_user(
-                username=validated_data['username'],
-                email=validated_data['email'],
-                password=validated_data['password'],
-                first_name=validated_data['first_name'],
-                last_name=validated_data['last_name']
-            )
-            return user
-        except IntegrityError:
-            raise ValidationError({"username": "A user with this username already exists."})
+        return data
+        
+
+    def save(self):
+        """Create a User instance, but don't save it yet. Instead, generate and send OTP."""
+        user = User(
+            username=self.validated_data['email'],  # Here we use email as the username, you can adjust if needed.
+            email=self.validated_data['email'],
+            first_name=self.validated_data['first_name'],
+            last_name=self.validated_data['last_name'],
+        )
+        user.set_password(self.validated_data['password'])
+        user.save()
+
+        refresh = RefreshToken.for_user(user)
+
+        return {
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+            },
+            'access_token': str(refresh.access_token),
+            'refresh_token': str(refresh),
+        }
