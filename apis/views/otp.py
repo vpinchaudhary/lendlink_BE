@@ -1,12 +1,13 @@
 from ..serializers import OTPRequestSerializer
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.contrib.auth.models import User
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 
 class OTPRequestView(APIView): 
+    permission_classes = [AllowAny]
     def get(self, request):
-        serializer = OTPRequestSerializer(data=request.data)
+        serializer = OTPRequestSerializer(data=request.query_params)
 
         if serializer.is_valid():
             serializer.sendOTP()

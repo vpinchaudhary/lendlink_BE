@@ -2,7 +2,6 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from ..models import OtpModel
 from django.core.mail import send_mail
-from rest_framework.permissions import AllowAny
 
 class OTPVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -22,8 +21,6 @@ class OTPVerificationSerializer(serializers.Serializer):
         return data
     
 class OTPRequestSerializer(serializers.Serializer):
-    permission_classes = [AllowAny]
-
     email = serializers.EmailField()
     purpose = serializers.CharField()
 
